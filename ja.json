@@ -1,21 +1,31 @@
 {
-    "version": "2.0.0",
-    "tasks": [
+    "version": "0.2.0",
+    "configurations": [
         {
-            "label": "OpenOCD: build",
-            "type": "shell",
-            "command": "make -j\"$(nproc)\"",
-            "options": {
-                "cwd": "${workspaceFolder}/build",
-                "env": {
-                    "LC_ALL": "C"
+            "name": "OpenOCD: debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/src/openocd",
+            "args": [
+                "-s",
+                "${workspaceFolder}/tcl",
+                "-f",
+                "${workspaceFolder}/scripts/cmsis-dap.cfg",
+                "-f",
+                "${workspaceFolder}/scripts/target_config.cfg"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LC_ALL",
+                    "value": "C"
                 }
-            },
-            "problemMatcher": ["$gcc"],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            ],
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "OpenOCD: build"
         }
     ]
 }
