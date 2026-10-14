@@ -1,7 +1,10 @@
-    {
-        .name = "newchip_xfer",
-        .handler = handle_newchip_xfer,
-        .mode = COMMAND_EXEC,
-        .help = "Execute raw IR/DR exchange; IR and DR up to 32 bits.",
-        .usage = "tap ir dr_bits tx",
-    },
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
+#ifndef OPENOCD_NEWCHIP_H
+#define OPENOCD_NEWCHIP_H
+
+struct command_context;
+
+int newchip_register_commands(struct command_context *cmd_ctx);
+
+#endif
