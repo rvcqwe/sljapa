@@ -129,9 +129,38 @@ static int c910_arch_state(struct target *target)
 static int c910_resume(struct target *target, bool current, target_addr_t address,
         bool handle_breakpoints, bool debug_execution)
 {
-    (void)current; (void)address; (void)handle_breakpoints; (void)debug_execution;
-    LOG_TARGET_ERROR(target, "resume is not implemented yet");
-    return ERROR_NOT_IMPLEMENTED;
+    (void)handle_breakpoints;
+    if (debug_execution || target->breakpoints || target->watchpoints) {
+        LOG_TARGET_ERROR(target, "Debug execution and break/watchpoints are not supported yet");
+        return ERROR_NOT_IMPLEMENTED;
+    }
+    int retval = c910_poll(target);
+    if (retval != ERROR_OK)
+        return retval;
+    if (target->state != TARGET_HALTED)
+        return ERROR_TARGET_NOT_HALTED;
+    if (!current) {
+        if (address & 1) {
+            LOG_TARGET_ERROR(target, "PC must be aligned to at least 2 bytes");
+            return ERROR_COMMAND_ARGUMENT_INVALID;
+        }
+        uint64_t pc;
+        retval = newchip_had_pc(target->tap, target->coreid, true, address, &pc);
+        if (retval != ERROR_OK)
+            return retval;
+    }
+    retval = newchip_had_resume(target->tap, target->coreid);
+    if (retval != ERROR_OK) {
+        /* A failed transfer may already have reached the model. */
+        target->state = TARGET_UNKNOWN;
+        target->debug_reason = DBG_REASON_UNDEFINED;
+        return retval;
+    }
+    /* OpenOCD requires asynchronous resume. A later poll may see an immediate
+     * re-halt; do not wait for PM=Active here or lose that transition. */
+    target->state = TARGET_RUNNING;
+    target->debug_reason = DBG_REASON_NOTHALTED;
+    return target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 }
 static int c910_step(struct target *target, bool current, target_addr_t address,
         bool handle_breakpoints)
@@ -152,3 +181,4 @@ struct target_type c910_had_target = {
     .step = c910_step,
     /* No get_gdb_reg_list: OpenOCD excludes this stage from GDB services. */
 };
+
