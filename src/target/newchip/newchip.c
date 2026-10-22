@@ -57,6 +57,17 @@ COMMAND_HANDLER(handle_newchip_had)
         else if (retval == ERROR_TIMEOUT_REACHED)
             command_print(CMD, "core %u halt timeout: HSR = 0x%08" PRIx32,
                     core, (uint32_t)value);
+    } else if (strcmp(CMD_NAME, "resume") == 0) {
+        retval = newchip_had_resume(tap, core);
+        if (retval != ERROR_OK)
+            return retval;
+        command_print(CMD, "core %u resume request sent", core);
+        retval = newchip_had_status(tap, core, &value);
+        if (retval == ERROR_OK)
+            command_print(CMD, "core %u HSR = 0x%08" PRIx32 ", PM = %u",
+                    core, (uint32_t)value, (unsigned int)(value & HAD_HSR_PM_MASK));
+        else
+            command_print(CMD, "Resume was sent, but HSR read failed (%d)", retval);
     } else if (is_pc) {
         uint64_t requested = 0;
         if (CMD_ARGC == 3) {
@@ -78,6 +89,9 @@ static const struct command_registration newchip_had_commands[] = {
       .help = "Read raw C910 HAD HSR.", .usage = "tap core" },
     { .name = "halt", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
       .help = "Request halt and wait for debug mode.", .usage = "tap core" },
+    { .name = "resume", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
+      .help = "Send resume request, then read HSR once. Does not update target state.",
+      .usage = "tap core" },
     { .name = "pc", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
       .help = "Read PC, or write and verify PC while halted.",
       .usage = "tap core [value]" },
@@ -95,3 +109,4 @@ int newchip_register_commands(struct command_context *cmd_ctx)
 {
     return register_commands(cmd_ctx, NULL, newchip_commands);
 }
+
