@@ -5,9 +5,11 @@
 #include <stdint.h>
 struct jtag_tap;
 enum {
-    HAD_REG_ID = 2, HAD_REG_HCR = 13, HAD_REG_HSR = 14, HAD_REG_PC = 19,
+    HAD_REG_ID = 2, HAD_REG_BYPASS = 12, HAD_REG_HCR = 13, HAD_REG_HSR = 14, HAD_REG_PC = 19,
 };
 #define HAD_ID_EXPECTED 0x080d2b43U
+#define HAD_HACR_GO (1U << 14)
+#define HAD_HACR_EX (1U << 13)
 #define HAD_HCR_DR (1U << 15)
 #define HAD_HSR_PM_MASK 3U
 #define HAD_HSR_PM_DEBUG 2U
@@ -19,6 +21,9 @@ int newchip_had_access(struct jtag_tap *tap, uint32_t core, uint32_t reg,
 int newchip_had_status(struct jtag_tap *tap, uint32_t core, uint64_t *hsr);
 bool newchip_had_is_halted(uint64_t hsr);
 int newchip_had_halt(struct jtag_tap *tap, uint32_t core, uint64_t *last_hsr);
+/* Sends resume only; use status/poll to observe subsequent state. */
+int newchip_had_resume(struct jtag_tap *tap, uint32_t core);
 int newchip_had_pc(struct jtag_tap *tap, uint32_t core,
         bool write, uint64_t requested, uint64_t *value);
 #endif
+
