@@ -86,6 +86,29 @@ int newchip_had_halt(struct jtag_tap *tap, uint32_t core, uint64_t *last_hsr)
     }
 }
 
+int newchip_had_resume(struct jtag_tap *tap, uint32_t core)
+{
+    uint64_t hsr, hcr, ignored;
+    int retval = newchip_had_status(tap, core, &hsr);
+    if (retval != ERROR_OK)
+        return retval;
+    if (!newchip_had_is_halted(hsr)) {
+        LOG_ERROR("Resume requires a halted core (HSR.PM=2)");
+        return ERROR_TARGET_NOT_HALTED;
+    }
+    retval = newchip_had_access(tap, core, HAD_REG_HCR, true, 32, 0, &hcr);
+    if (retval != ERROR_OK)
+        return retval;
+    /* Preserve TME, breakpoint settings and every other HCR bit. */
+    retval = newchip_had_access(tap, core, HAD_REG_HCR,
+            false, 32, hcr & ~(uint64_t)HAD_HCR_DR, &ignored);
+    if (retval != ERROR_OK)
+        return retval;
+    /* Reference c910_had_resume_core: bank 0 BYPASS, GO|EX, DR64 zeros. */
+    uint32_t instruction = (HAD_REG_BYPASS << 8) | HAD_HACR_GO | HAD_HACR_EX | core;
+    return newchip_xfer(tap, instruction, 64, 0, &ignored);
+}
+
 int newchip_had_pc(struct jtag_tap *tap, uint32_t core,
         bool write, uint64_t requested, uint64_t *value)
 {
@@ -113,3 +136,4 @@ int newchip_had_pc(struct jtag_tap *tap, uint32_t core,
     }
     return ERROR_OK;
 }
+
