@@ -1,9 +1,7 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <inttypes.h>
-#include <string.h>
 #include <helper/command.h>
 #include <jtag/jtag.h>
 #include "newchip.h"
@@ -25,74 +23,142 @@ COMMAND_HANDLER(handle_newchip_xfer)
     return retval;
 }
 
-COMMAND_HANDLER(handle_newchip_had)
+/* Call after the handler has checked its argument count. */
+static int newchip_parse_tap_core(struct command_invocation *cmd,
+        struct jtag_tap **tap, uint32_t *core)
 {
-    bool is_pc = strcmp(CMD_NAME, "pc") == 0;
-    if (CMD_ARGC != 2 && !(is_pc && CMD_ARGC == 3))
+    if (CMD_ARGC < 2)
         return ERROR_COMMAND_SYNTAX_ERROR;
-    struct jtag_tap *tap = jtag_tap_by_string(CMD_ARGV[0]);
-    if (!tap || !tap->enabled || tap->ir_length != 16) {
+
+    *tap = jtag_tap_by_string(CMD_ARGV[0]);
+    if (!*tap || !(*tap)->enabled || (*tap)->ir_length != 16) {
         command_print(CMD, "Expected an enabled C910 TAP with 16-bit IR");
         return ERROR_COMMAND_ARGUMENT_INVALID;
     }
-    uint32_t core;
-    COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], core);
-    if (core > 3)
+
+    COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], *core);
+    if (*core > 3)
         return ERROR_COMMAND_ARGUMENT_INVALID;
-    uint64_t value = 0;
-    int retval;
-    if (strcmp(CMD_NAME, "id") == 0) {
-        retval = newchip_had_access(tap, core, HAD_REG_ID, true, 32, 0, &value);
-        if (retval == ERROR_OK)
-            command_print(CMD, "core %u ID = 0x%08" PRIx32, core, (uint32_t)value);
-    } else if (strcmp(CMD_NAME, "status") == 0) {
-        retval = newchip_had_status(tap, core, &value);
-        if (retval == ERROR_OK)
-            command_print(CMD, "core %u HSR = 0x%08" PRIx32, core, (uint32_t)value);
-    } else if (strcmp(CMD_NAME, "halt") == 0) {
-        retval = newchip_had_halt(tap, core, &value);
-        if (retval == ERROR_OK)
-            command_print(CMD, "core %u halted: HSR = 0x%08" PRIx32,
-                    core, (uint32_t)value);
-        else if (retval == ERROR_TIMEOUT_REACHED)
-            command_print(CMD, "core %u halt timeout: HSR = 0x%08" PRIx32,
-                    core, (uint32_t)value);
-    } else if (strcmp(CMD_NAME, "resume") == 0) {
-        retval = newchip_had_resume(tap, core);
-        if (retval != ERROR_OK)
-            return retval;
-        command_print(CMD, "core %u resume request sent", core);
-        retval = newchip_had_status(tap, core, &value);
-        if (retval == ERROR_OK)
-            command_print(CMD, "core %u HSR = 0x%08" PRIx32 ", PM = %u",
-                    core, (uint32_t)value, (unsigned int)(value & HAD_HSR_PM_MASK));
-        else
-            command_print(CMD, "Resume was sent, but HSR read failed (%d)", retval);
-    } else if (is_pc) {
-        uint64_t requested = 0;
-        if (CMD_ARGC == 3) {
-            COMMAND_PARSE_NUMBER(u64, CMD_ARGV[2], requested);
-        }
-        retval = newchip_had_pc(tap, core, CMD_ARGC == 3, requested, &value);
-        if (retval == ERROR_OK)
-            command_print(CMD, "core %u PC = 0x%016" PRIx64, core, value);
-    } else {
+
+    return ERROR_OK;
+}
+
+COMMAND_HANDLER(handle_newchip_id)
+{
+    if (CMD_ARGC != 2)
         return ERROR_COMMAND_SYNTAX_ERROR;
+
+    struct jtag_tap *tap;
+    uint32_t core;
+    int retval = newchip_parse_tap_core(CMD, &tap, &core);
+    if (retval != ERROR_OK)
+        return retval;
+
+    uint64_t value = 0;
+    retval = newchip_had_access(tap, core, HAD_REG_ID, true, 32, 0, &value);
+    if (retval == ERROR_OK)
+        command_print(CMD, "core %u ID = 0x%08" PRIx32, core, (uint32_t)value);
+    return retval;
+}
+
+COMMAND_HANDLER(handle_newchip_status)
+{
+    if (CMD_ARGC != 2)
+        return ERROR_COMMAND_SYNTAX_ERROR;
+
+    struct jtag_tap *tap;
+    uint32_t core;
+    int retval = newchip_parse_tap_core(CMD, &tap, &core);
+    if (retval != ERROR_OK)
+        return retval;
+
+    uint64_t value = 0;
+    retval = newchip_had_status(tap, core, &value);
+    if (retval == ERROR_OK)
+        command_print(CMD, "core %u HSR = 0x%08" PRIx32, core, (uint32_t)value);
+    return retval;
+}
+
+COMMAND_HANDLER(handle_newchip_halt)
+{
+    if (CMD_ARGC != 2)
+        return ERROR_COMMAND_SYNTAX_ERROR;
+
+    struct jtag_tap *tap;
+    uint32_t core;
+    int retval = newchip_parse_tap_core(CMD, &tap, &core);
+    if (retval != ERROR_OK)
+        return retval;
+
+    uint64_t value = 0;
+    retval = newchip_had_halt(tap, core, &value);
+    if (retval == ERROR_OK)
+        command_print(CMD, "core %u halted: HSR = 0x%08" PRIx32,
+                core, (uint32_t)value);
+    else if (retval == ERROR_TIMEOUT_REACHED)
+        command_print(CMD, "core %u halt timeout: HSR = 0x%08" PRIx32,
+                core, (uint32_t)value);
+    return retval;
+}
+
+COMMAND_HANDLER(handle_newchip_resume)
+{
+    if (CMD_ARGC != 2)
+        return ERROR_COMMAND_SYNTAX_ERROR;
+
+    struct jtag_tap *tap;
+    uint32_t core;
+    int retval = newchip_parse_tap_core(CMD, &tap, &core);
+    if (retval != ERROR_OK)
+        return retval;
+
+    retval = newchip_had_resume(tap, core);
+    if (retval != ERROR_OK)
+        return retval;
+
+    command_print(CMD, "core %u resume request sent", core);
+    uint64_t value = 0;
+    retval = newchip_had_status(tap, core, &value);
+    if (retval == ERROR_OK)
+        command_print(CMD, "core %u HSR = 0x%08" PRIx32 ", PM = %u",
+                core, (uint32_t)value, (unsigned int)(value & HAD_HSR_PM_MASK));
+    else
+        command_print(CMD, "Resume was sent, but HSR read failed (%d)", retval);
+    return retval;
+}
+
+COMMAND_HANDLER(handle_newchip_pc)
+{
+    if (CMD_ARGC != 2 && CMD_ARGC != 3)
+        return ERROR_COMMAND_SYNTAX_ERROR;
+
+    struct jtag_tap *tap;
+    uint32_t core;
+    int retval = newchip_parse_tap_core(CMD, &tap, &core);
+    if (retval != ERROR_OK)
+        return retval;
+
+    uint64_t requested = 0, value = 0;
+    if (CMD_ARGC == 3) {
+        COMMAND_PARSE_NUMBER(u64, CMD_ARGV[2], requested);
     }
+    retval = newchip_had_pc(tap, core, CMD_ARGC == 3, requested, &value);
+    if (retval == ERROR_OK)
+        command_print(CMD, "core %u PC = 0x%016" PRIx64, core, value);
     return retval;
 }
 
 static const struct command_registration newchip_had_commands[] = {
-    { .name = "id", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
+    { .name = "id", .handler = handle_newchip_id, .mode = COMMAND_EXEC,
       .help = "Read C910 HAD ID.", .usage = "tap core" },
-    { .name = "status", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
+    { .name = "status", .handler = handle_newchip_status, .mode = COMMAND_EXEC,
       .help = "Read raw C910 HAD HSR.", .usage = "tap core" },
-    { .name = "halt", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
+    { .name = "halt", .handler = handle_newchip_halt, .mode = COMMAND_EXEC,
       .help = "Request halt and wait for debug mode.", .usage = "tap core" },
-    { .name = "resume", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
+    { .name = "resume", .handler = handle_newchip_resume, .mode = COMMAND_EXEC,
       .help = "Send resume request, then read HSR once. Does not update target state.",
       .usage = "tap core" },
-    { .name = "pc", .handler = handle_newchip_had, .mode = COMMAND_EXEC,
+    { .name = "pc", .handler = handle_newchip_pc, .mode = COMMAND_EXEC,
       .help = "Read PC, or write and verify PC while halted.",
       .usage = "tap core [value]" },
     COMMAND_REGISTRATION_DONE
@@ -109,4 +175,3 @@ int newchip_register_commands(struct command_context *cmd_ctx)
 {
     return register_commands(cmd_ctx, NULL, newchip_commands);
 }
-
